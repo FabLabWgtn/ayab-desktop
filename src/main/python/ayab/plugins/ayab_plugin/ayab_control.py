@@ -692,12 +692,14 @@ class AyabPluginControl(KnittingPlugin):
 
             # send line to machine
             if self.__infRepeat:
-              self.__ayabCom.cnf_line(reqestedLine, bytes, 0, crc8)
+              flags = 0 | sendBlankLine << 1 | color << 3
+              self.__ayabCom.cnf_line(reqestedLine, bytes, flags, crc8)
             else:
-              self.__ayabCom.cnf_line(reqestedLine, bytes, lastLine, crc8)
+              flags = lastLine | sendBlankLine << 1 | color << 3
+              self.__ayabCom.cnf_line(reqestedLine, bytes, flags, crc8)
 
             # screen output
-            colorNames = "A", "B", "C", "D"
+            colorNames = "A", "B", "C", "D", "E", "F", "G", "H"
             msg = str(self.__lineBlock) # Block
             msg += ' ' + str(lineNumber) # Total Line Number
             msg += ' reqLine: ' + str(reqestedLine)
