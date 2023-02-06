@@ -95,6 +95,7 @@ def package_version(app_context):
     return version
 
 def latest_version(repo):
+    pass
     r = requests.get("https://api.github.com/repos/" + repo + "/releases/latest")
     obj = r.json()
     if obj["draft"] == False and obj["prerelease"] == False:

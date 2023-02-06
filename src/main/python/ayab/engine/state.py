@@ -85,10 +85,6 @@ M
 
     def _API6_setup(control, operation):
         control.logger.debug("State SETUP")
-        if operation == Operation.KNIT:
-            if not control.func_selector():
-                return Output.ERROR_INVALID_SETTINGS
-        # else
         control.logger.debug("Port name: " + control.portname)
         if control.portname == QCoreApplication.translate(
                 "KnitEngine", "Simulation"):

@@ -22,13 +22,26 @@ from bitarray import bitarray
 import numpy as np
 
 from .options import Alignment
+from .mode import Mode, ModeFunc
+
 from ayab.machine import Machine
 
 
 class Pattern(object):
-    def __init__(self, image, machine, num_colors=2):
+    FLANKING_NEEDLES = True
+
+    def __init__(self, image, machine, options):
+        self.machine = options.machine
+
         self.__pattern = image
-        self.__num_colors = num_colors
+
+        self.__num_colors = options.num_colors
+
+        self.start_row = options.start_row
+        self.mode = options.mode
+        self.inf_repeat = options.inf_repeat
+        self.continuous_reporting = options.continuous_reporting
+
         self.__alignment = Alignment.CENTER
         self.__pat_start_needle = -1
         self.__pat_end_needle = -1
@@ -40,6 +53,24 @@ class Pattern(object):
         self.__pat_width = self.__pattern.width
         self.__pat_height = self.__pattern.height
         self.__convert()
+        self.__func_selector()
+
+        self.len_pat_expanded = self.pat_height * self.num_colors
+        self.passes_per_row = self.mode.row_multiplier(self.num_colors)
+        self.start_needle = max(0, self.__pat_start_needle)
+        self.start_needle = max(0, self.__pat_start_needle)
+        self.end_needle = min(
+           self.__pat_width + self.__pat_start_needle,
+           self.machine.width)
+        self.start_pixel = self.start_needle - self.__pat_start_needle
+        self.end_pixel = self.end_needle - self.__pat_start_needle
+        if self.FLANKING_NEEDLES:
+           self.midline = self.__knit_end_needle - self.machine.width // 2
+        else:
+           self.midline = self.end_needle - self.machine.width // 2
+
+
+        self.__compile()
         self.__calc_pat_start_end_needles()
 
     def __convert(self):
@@ -96,6 +127,74 @@ class Pattern(object):
                         # colors separated per line
                         self.__pattern_expanded[(self.__num_colors * row) +
                                                 color][col] = True
+
+    def __compile(self):
+        print("pattern compile")
+        self.__line_data = []
+        line_number = 0
+        last_line = False
+        line_data = []
+
+        while not last_line:
+                    # get data for next line of knitting
+
+            color, row_index, pat_row, blank_line, last_line = self.mode_func(self, line_number)
+            bits = self.select_needles_API6(color, row_index, blank_line)
+
+            if (self.mode.optimize() and len(self.__line_data)>0 and sum(bits)==0 and sum(self.__line_data[-1]["bits"])==0 and color == self.__line_data[-1]["color"]):
+                self.__line_data.pop()
+            else:
+                self.__line_data.append({
+                    "color": color,
+                    "row_index": row_index,
+                    "pat_row": pat_row,
+                    "blank_line": blank_line,
+                    "last_line": last_line,
+                    "bits": bits
+                })
+            line_number += 1
+        print(self.__line_data)
+
+    def line_data(self, line_number):
+        line_data = self.__line_data[line_number]
+        return line_data["color"], line_data["row_index"], line_data["pat_row"], line_data["blank_line"], line_data["last_line"], line_data["bits"]
+
+    def __func_selector(self):
+        """
+        Method selecting the function that decides which line of data to send
+        according to the knitting mode and number of colors.
+
+        @author Tom Price
+        @date   June 2020
+        """
+        if not self.mode.good_ncolors(self.num_colors):
+            self.logger.error("Wrong number of colours for the knitting mode")
+            return False
+        # else
+        func_name = self.mode.knit_func(self.num_colors)
+        if not hasattr(ModeFunc, func_name):
+            self.logger.error(
+                "Unrecognized value returned from Mode.knit_func()")
+            return False
+        # else
+        self.mode_func = getattr(ModeFunc, func_name)
+        return True
+
+    def select_needles_API6(self, color, row_index, blank_line):
+        bits = bitarray([False] * self.machine.width, endian="little")
+
+        # select needles flanking the pattern
+        # if necessary to knit the background color
+        if self.mode.flanking_needles(color, self.num_colors):
+            bits[0:self.start_needle] = True
+            bits[self.end_needle:self.machine.width] = True
+
+        if not blank_line:
+            bits[self.start_needle:self.end_needle] = (
+                self.__pattern_expanded
+            )[row_index][self.start_pixel:self.end_pixel]
+
+        return bits
 
     def __calc_pat_start_end_needles(self):
         # the sequence of needles is printed in right to left by default

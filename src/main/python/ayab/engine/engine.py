@@ -124,7 +124,7 @@ class Engine(Observable, QDockWidget):
         # TODO: detect if previous conf had the same
         # image to avoid re-generating.
         self.pattern = Pattern(image, self.config.machine,
-                               self.config.num_colors)
+                               self.config)
 
         # validate configuration options
         valid, msg = self.validate()

@@ -86,27 +86,6 @@ class Control(Observable):
         except Exception:
             pass
 
-    def func_selector(self):
-        """
-        Method selecting the function that decides which line of data to send
-        according to the knitting mode and number of colors.
-
-        @author Tom Price
-        @date   June 2020
-        """
-        if not self.mode.good_ncolors(self.num_colors):
-            self.logger.error("Wrong number of colours for the knitting mode")
-            return False
-        # else
-        func_name = self.mode.knit_func(self.num_colors)
-        if not hasattr(ModeFunc, func_name):
-            self.logger.error(
-                "Unrecognized value returned from Mode.knit_func()")
-            return False
-        # else
-        self.mode_func = getattr(ModeFunc, func_name)
-        return True
-
     def reset_status(self):
         self.status.reset()
         if self.mode == Mode.SINGLEBED:
@@ -151,9 +130,11 @@ class Control(Observable):
         line_number += self.BLOCK_LENGTH * self.line_block
 
         # get data for next line of knitting
-        color, row_index, blank_line, last_line = self.mode_func(
-            self, line_number)
-        bits = self.select_needles_API6(color, row_index, blank_line)
+        # color, row_index, blank_line, last_line = self.mode_func(
+        #     self, line_number)
+        # bits = self.select_needles_API6(color, row_index, blank_line)
+
+        color, row_index, pat_row, blank_line, last_line, bits = self.pattern.line_data(line_number)
 
         # send line to machine
         flag = last_line and not self.inf_repeat
@@ -162,7 +143,7 @@ class Control(Observable):
         # screen output
         # TODO: tidy up this code
         msg = str(self.line_block) + " " + str(line_number) + " reqLine: " + \
-            str(requested_line) + " pat_row: " + str(self.pat_row)
+            str(requested_line) + " pat_row: " + str(pat_row)
         if blank_line:
             msg += " BLANK LINE"
         else:
@@ -171,7 +152,7 @@ class Control(Observable):
         self.logger.debug(msg)
 
         # get status to send to GUI
-        self.__update_status(line_number, color, bits)
+        self.__update_status(line_number, pat_row, color, bits)
 
         if not last_line:
             return False  # keep knitting
@@ -181,8 +162,8 @@ class Control(Observable):
         else:
             return True  # pattern finished
 
-    def __update_status(self, line_number, color, bits):
-        self.status.current_row = self.pat_row + 1
+    def __update_status(self, line_number, pat_row, color, bits):
+        self.status.current_row = pat_row + 1
         self.status.line_number = line_number
         if self.inf_repeat:
             self.status.repeats = self.pattern_repeats
@@ -199,22 +180,6 @@ class Control(Observable):
             self.status.carriage_direction = self.initial_direction
         else:
             self.status.carriage_direction = self.initial_direction.reverse()
-
-    def select_needles_API6(self, color, row_index, blank_line):
-        bits = bitarray([False] * self.machine.width, endian="little")
-
-        # select needles flanking the pattern
-        # if necessary to knit the background color
-        if self.mode.flanking_needles(color, self.num_colors):
-            bits[0:self.start_needle] = True
-            bits[self.end_needle:self.machine.width] = True
-
-        if not blank_line:
-            bits[self.start_needle:self.end_needle] = (
-                self.pattern.pattern_expanded
-            )[row_index][self.start_pixel:self.end_pixel]
-
-        return bits
 
     def operate(self, operation, API_version=6):
         """Finite State Machine governing serial communication"""

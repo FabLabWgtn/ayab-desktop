@@ -38,11 +38,6 @@ class AppContext(ApplicationContext):  # 1. Subclass ApplicationContext
         self.install_translator()
         self.main_window.show()
         pkg = utils.package_version(self)
-        tag = self.check_new_version(self.REPO)
-        if tag != None and tag != pkg:
-            url = "https://github.com/" + self.REPO + "/releases/tag/" + tag
-            utils.display_blocking_popup(
-               "<p>A new version of the AYAB desktop software has been released! You can download version <strong>" + tag + "</strong> using this link:<br/><br/><a href='" + url + "'>" + url + "</a></p>")
         return self.app.exec_()  # 3. End run() with this line
 
     def check_new_version(self, repo):
